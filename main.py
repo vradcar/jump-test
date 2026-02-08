@@ -63,9 +63,11 @@ def run_pipeline(query: str, skip_email: bool = False, num_results: int | None =
         for row in enriched:
             row["company_domain"] = None
             row["email"] = None
+            row["email_source"] = None
     else:
-        console.print("[bold]Step 4/4 · Enriching with Hunter.io …[/bold]")
-        enriched = email_enricher.enrich_profiles(profiles)
+        method = config.EMAIL_METHOD
+        console.print(f"[bold]Step 4/4 · Finding emails …[/bold]")
+        enriched = email_enricher.enrich_profiles(profiles, method=method)
         console.print()
 
     # ── Display + Save ───────────────────────────────────────────────────
@@ -101,7 +103,7 @@ def main(query: str | None, interactive: bool, skip_email: bool, num: int | None
     _banner()
 
     # ── Config validation ────────────────────────────────────────────────
-    errors = config.validate(require_hunter=not skip_email)
+    errors = config.validate(skip_email=skip_email)
     if errors:
         for e in errors:
             console.print(f"  [red]✗ {e}[/red]")

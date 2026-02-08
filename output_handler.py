@@ -21,6 +21,7 @@ _FIELDNAMES = [
     "company_name",
     "company_domain",
     "email",
+    "email_source",
     "location",
     "linkedin_url",
     "context_snippet",

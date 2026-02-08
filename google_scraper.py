@@ -1,14 +1,11 @@
 """
-Google Scraper — executes a Boolean search string on Google using
-cookie-based authentication to bypass bot detection, then parses
-the organic results.
+SerpAPI client — uses SerpAPI to search Google for LinkedIn profiles.
 """
 
 import time
-import requests
-from bs4 import BeautifulSoup
 from dataclasses import dataclass
 from rich.console import Console
+from serpapi import GoogleSearch
 
 import config
 
@@ -25,73 +22,42 @@ class SearchResult:
 
 def search(boolean_string: str, num_results: int | None = None) -> list[SearchResult]:
     """
-    Runs the boolean string as a Google query and returns parsed results.
-
-    Uses cookie + user-agent headers to appear as a real browser session.
+    Performs a Google Custom Search using the official API.
     """
     num = num_results or config.GOOGLE_NUM_RESULTS
 
-    headers = {
-        "User-Agent": config.GOOGLE_USER_AGENT,
-        "Cookie": config.GOOGLE_COOKIE,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Referer": "https://www.google.com/",
-        "DNT": "1",
-    }
+    console.print(f"  [dim]Querying SerpAPI with {len(boolean_string)} char Boolean string …[/dim]")
 
-    params = {
-        "q": boolean_string,
-        "num": num,
-        "hl": "en",
-    }
-
-    console.print(f"  [dim]Querying Google with {len(boolean_string)} char Boolean string …[/dim]")
-
-    try:
-        resp = requests.get(
-            "https://www.google.com/search",
-            headers=headers,
-            params=params,
-            timeout=15,
-        )
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        console.print(f"  [red]Google request failed:[/red] {exc}")
+    if not config.SERPAPI_KEY:
+        console.print("  [red]Error: SERPAPI_KEY must be set in .env[/red]")
+        console.print("  [yellow]Get free key at: https://serpapi.com/users/sign_up[/yellow]")
         return []
 
-    # Check for CAPTCHA / block page
-    if "sorry" in resp.url.lower() or resp.status_code == 429:
-        console.print("  [red]Google returned a CAPTCHA or rate-limit page.[/red]")
-        console.print("  [yellow]→ Refresh your GOOGLE_COOKIE in .env and try again.[/yellow]")
-        return []
-
-    soup = BeautifulSoup(resp.text, "html.parser")
     results: list[SearchResult] = []
 
-    # Google wraps each organic result in a <div class="g"> (or data-sokoban)
-    for g_div in soup.select("div.g"):
-        # Title + URL live in the first <a> with an <h3>
-        anchor = g_div.select_one("a[href]")
-        h3 = g_div.select_one("h3")
-        if not anchor or not h3:
-            continue
+    try:
+        # Query SerpAPI
+        search = GoogleSearch({
+            "q": boolean_string,
+            "num": num,
+            "api_key": config.SERPAPI_KEY
+        })
+        
+        response = search.get_dict()
+        organic_results = response.get("organic_results", [])
+        
+        for item in organic_results:
+            url = item.get("link", "")
+            title = item.get("title", "")
+            snippet = item.get("snippet", "")
 
-        url = anchor.get("href", "")
-        title = h3.get_text(strip=True)
+            # Only keep LinkedIn profile URLs
+            if "linkedin.com/in/" in url:
+                results.append(SearchResult(title=title, url=url, snippet=snippet))
 
-        # Snippet — usually in a <div> with class containing "VwiC3b" or a <span>
-        snippet_el = (
-            g_div.select_one("[data-sncf]")
-            or g_div.select_one(".VwiC3b")
-            or g_div.select_one("div.IsZvec")
-        )
-        snippet = snippet_el.get_text(" ", strip=True) if snippet_el else ""
-
-        # Only keep LinkedIn profile URLs
-        if "linkedin.com/in/" in url:
-            results.append(SearchResult(title=title, url=url, snippet=snippet))
+    except Exception as e:
+        console.print(f"  [red]Error querying SerpAPI:[/red] {e}")
+        return []
 
     # Respect rate limits
     time.sleep(config.GOOGLE_DELAY_SECONDS)

@@ -1,10 +1,9 @@
 """
-Boolean Generator — uses OpenAI to convert a free-form query into a
-Google Boolean search string targeting LinkedIn profiles.
+Boolean Generator — uses AI (Gemini or OpenAI) to convert a free-form
+query into a Google Boolean search string targeting LinkedIn profiles.
 """
 
-from openai import OpenAI
-import config
+import ai_client
 
 SYSTEM_PROMPT = """You are an expert researcher and Boolean search specialist.
 
@@ -38,18 +37,11 @@ def generate(query: str) -> str:
     Takes a free-form audience description and returns a Google Boolean search
     string targeting LinkedIn profiles.
     """
-    client = OpenAI(api_key=config.OPENAI_API_KEY)
-
-    response = client.chat.completions.create(
-        model=config.OPENAI_MODEL,
+    boolean_string = ai_client.chat(
+        system_prompt=SYSTEM_PROMPT,
+        user_message=query,
         temperature=0.2,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": query},
-        ],
     )
-
-    boolean_string = response.choices[0].message.content.strip()
 
     # Strip markdown code fences if the model wraps the answer
     for fence in ("```", "`"):

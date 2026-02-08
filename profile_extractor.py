@@ -1,13 +1,12 @@
 """
-Profile Extractor — uses OpenAI to pull structured fields from raw
-Google search result snippets.
+Profile Extractor — uses AI (Gemini or OpenAI) to pull structured
+fields from raw Google search result snippets.
 """
 
 import json
-from openai import OpenAI
 from dataclasses import dataclass, asdict
 
-import config
+import ai_client
 from google_scraper import SearchResult
 
 SYSTEM_PROMPT = """You are a data-extraction assistant.
@@ -57,22 +56,17 @@ def extract_profiles(results: list[SearchResult]) -> list[ProfileData]:
     if not results:
         return []
 
-    client = OpenAI(api_key=config.OPENAI_API_KEY)
     profiles: list[ProfileData] = []
 
     for r in results:
         user_content = f"Title: {r.title}\nSnippet: {r.snippet}\nURL: {r.url}"
 
         try:
-            resp = client.chat.completions.create(
-                model=config.OPENAI_MODEL,
+            raw = ai_client.chat(
+                system_prompt=SYSTEM_PROMPT,
+                user_message=user_content,
                 temperature=0.0,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content},
-                ],
             )
-            raw = resp.choices[0].message.content.strip()
 
             # Strip markdown fences if present
             if raw.startswith("```"):
